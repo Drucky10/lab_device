@@ -1,0 +1,38 @@
+#include <iostream>
+#include <tuple>
+
+// Структура для представления потока (концентрация и объем)
+struct Stream {
+    double concentration;
+    double volume;
+};
+
+// Функция моделирования реактора
+// Принимает два входящих потока
+// Возвращает два выходящих потока
+std::tuple<Stream, Stream> complexReactor(const Stream& input1, const Stream& input2) {
+    // Пример объединения потоков
+    double totalVolume = input1.volume + input2.volume;
+    double mixedConcentration = (input1.concentration * input1.volume + input2.concentration * input2.volume) / totalVolume;
+
+    // Моделируем реакцию: допустим, конверсия 30% концентрации
+    double reactedConcentration = mixedConcentration * 0.7;
+
+    // Делим выход на два потока, например равномерно
+    Stream output1 = { reactedConcentration, totalVolume * 0.5 };
+    Stream output2 = { reactedConcentration, totalVolume * 0.5 };
+
+    return std::make_tuple(output1, output2);
+}
+
+int main() {
+    Stream input1 { 2.0, 10.0 }; // концентрация 2, объем 10
+    Stream input2 { 5.0, 5.0 };  // концентрация 5, объем 5
+
+    auto [output1, output2] = complexReactor(input1, input2);
+
+    std::cout << "Output 1: concentration = " << output1.concentration << ", volume = " << output1.volume << "\n";
+    std::cout << "Output 2: concentration = " << output2.concentration << ", volume = " << output2.volume << "\n";
+
+    return 0;
+}
