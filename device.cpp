@@ -1,347 +1,109 @@
-/**
- * @file main.cpp
- *
- * @brief A C++ program demonstrating the usage of the Stream and Device classes.
- */
-
+#include <cassert>
 #include <iostream>
-#include <string>
-#include <vector>
 #include <memory>
-#include <cmath>
+#include <tuple>
+#include <string>
 
-using namespace std;
-
-int streamcounter; ///< Global variable to keep track of stream creation.
-
-const int MIXER_OUTPUTS = 1;
-const float POSSIBLE_ERROR = 0.01;
-
-/**
- * @class Stream
- * @brief Represents a chemical stream with a name and mass flow.
- */
-class Stream
-{
+class Apparatus {
 private:
-    double mass_flow; ///< The mass flow rate of the stream.
-    string name;      ///< The name of the stream.
-
+    std::string name;
 public:
-    /**
-     * @brief Constructor to create a Stream with a unique name.
-     * @param s An integer used to generate a unique name for the stream.
-     */
-    Stream(int s){setName("s"+std::to_string(s));}
-
-    /**
-     * @brief Set the name of the stream.
-     * @param s The new name for the stream.
-     */
-    void setName(string s){name=s;}
-
-    /**
-     * @brief Get the name of the stream.
-     * @return The name of the stream.
-     */
-    string getName(){return name;}
-
-    /**
-     * @brief Set the mass flow rate of the stream.
-     * @param m The new mass flow rate value.
-     */
-    void setMassFlow(double m){mass_flow=m;}
-
-    /**
-     * @brief Get the mass flow rate of the stream.
-     * @return The mass flow rate of the stream.
-     */
-    double getMassFlow() const {return mass_flow;}
-
-    /**
-     * @brief Print information about the stream.
-     */
-    void print() { cout << "Stream " << getName() << " flow = " << getMassFlow() << endl; }
+    Apparatus(const std::string& n) : name(n) {}
+    std::string getName() const { return name; }
 };
 
-/**
- * @class Device
- * @brief Represents a device that manipulates chemical streams.
- */
-class Device
-{
-protected:
-    vector<shared_ptr<Stream>> inputs;  ///< Input streams connected to the device.
-    vector<shared_ptr<Stream>> outputs; ///< Output streams produced by the device.
-    int inputAmount;
-    int outputAmount;
+class Stream {
+private:
+    double concentration;
+    double volume;
+    std::shared_ptr<Apparatus> fromApparatus;
+    std::shared_ptr<Apparatus> toApparatus;
 public:
-    /**
-     * @brief Add an input stream to the device.
-     * @param s A shared pointer to the input stream.
-     */
-    void addInput(shared_ptr<Stream> s){
-      if(inputs.size() < inputAmount) inputs.push_back(s);
-      else throw"INPUT STREAM LIMIT!";
-    }
-    /**
-     * @brief Add an output stream to the device.
-     * @param s A shared pointer to the output stream.
-     */
-    void addOutput(shared_ptr<Stream> s){
-      if(outputs.size() < outputAmount) outputs.push_back(s);
-      else throw "OUTPUT STREAM LIMIT!";
-    }
+    Stream(double conc, double vol) : concentration(conc), volume(vol) {}
 
-    /**
-     * @brief Update the output streams of the device (to be implemented by derived classes).
-     */
-    virtual void updateOutputs() = 0;
+    double getConcentration() const { return concentration; }
+    void setConcentration(double conc) { concentration = conc; }
+
+    double getVolume() const { return volume; }
+    void setVolume(double vol) { volume = vol; }
+
+    std::shared_ptr<Apparatus> getFromApparatus() const { return fromApparatus; }
+    void setFromApparatus(std::shared_ptr<Apparatus> app) { fromApparatus = app; }
+
+    std::shared_ptr<Apparatus> getToApparatus() const { return toApparatus; }
+    void setToApparatus(std::shared_ptr<Apparatus> app) { toApparatus = app; }
 };
 
-class Mixer: public Device
-{
-    private:
-      int _inputs_count = 0;
-    public:
-      Mixer(int inputs_count): Device() {
-        _inputs_count = inputs_count;
-      }
-      void addInput(shared_ptr<Stream> s) {
-        if (inputs.size() == _inputs_count) {
-          throw "Too much inputs"s;
-        }
-        inputs.push_back(s);
-      }
-      void addOutput(shared_ptr<Stream> s) {
-        if (outputs.size() == MIXER_OUTPUTS) {
-          throw "Too much outputs"s;
-        }
-        outputs.push_back(s);
-      }
-      void updateOutputs() override {
-        double sum_mass_flow = 0;
-        for (const auto& input_stream : inputs) {
-          sum_mass_flow += input_stream -> getMassFlow();
-        }
+std::tuple<Stream, Stream> complexReactor(const Stream& input1, const Stream& input2,
+                                         std::shared_ptr<Apparatus> reactorApparatus) {
+    double totalVolume = input1.getVolume() + input2.getVolume();
+    double mixedConcentration = (input1.getConcentration() * input1.getVolume() + input2.getConcentration() * input2.getVolume()) / totalVolume;
+    double reactedConcentration = mixedConcentration * 0.7;
 
-        if (outputs.empty()) {
-          throw "Should set outputs before update"s;
-        }
+    Stream output1(reactedConcentration, totalVolume * 0.5);
+    Stream output2(reactedConcentration, totalVolume * 0.5);
 
-        double output_mass = sum_mass_flow / outputs.size(); // divide 0
+    output1.setFromApparatus(reactorApparatus);
+    output2.setFromApparatus(reactorApparatus);
 
-        for (auto& output_stream : outputs) {
-          output_stream -> setMassFlow(output_mass);
-        }
-      }
-};
+    output1.setToApparatus(nullptr);
+    output2.setToApparatus(nullptr);
 
-void shouldSetOutputsCorrectlyWithOneOutput() {
-    streamcounter=0;
-    Mixer d1 = Mixer(2);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-
-    d1.addInput(s1);
-    d1.addInput(s2);
-    d1.addOutput(s3);
-
-    d1.updateOutputs();
-
-    if (abs(s3->getMassFlow()) - 15 < POSSIBLE_ERROR) {
-      cout << "Test 1 passed"s << endl;
-    } else {
-      cout << "Test 1 failed"s << endl;
-    }
+    return std::make_tuple(output1, output2);
 }
 
-void shouldCorrectOutputs() {
-    streamcounter=0;
-    Mixer d1 = Mixer(2);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    shared_ptr<Stream> s4(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
+// Тесты
+void runTests() {
+    // Создаем аппараты
+    auto app1 = std::make_shared<Apparatus>("Apparatus 1");
+    auto app2 = std::make_shared<Apparatus>("Apparatus 2");
+    auto reactor = std::make_shared<Apparatus>("Reactor");
 
-    d1.addInput(s1);
-    d1.addInput(s2);
-    d1.addOutput(s3);
+    // Тест 1: Проверка правильности установки концентрации и объема после реакции
+    Stream input1(3.0, 6.0);
+    Stream input2(7.0, 6.0);
+    input1.setFromApparatus(app1);
+    input1.setToApparatus(reactor);
+    input2.setFromApparatus(app2);
+    input2.setToApparatus(reactor);
 
-    try {
-      d1.addOutput(s4);
-    } catch (const string ex) {
-      if (ex == "Too much outputs"s) {
-        cout << "Test 2 passed"s << endl;
+    auto [out1, out2] = complexReactor(input1, input2, reactor);
+    double expectedConc = ((3.0*6.0 + 7.0*6.0) / 12.0) * 0.7;
+    assert(abs(out1.getConcentration() - expectedConc) < 1e-9);
+    assert(abs(out2.getConcentration() - expectedConc) < 1e-9);
+    assert(out1.getVolume() == 6.0);
+    assert(out2.getVolume() == 6.0);
 
-        return;
-      }
-    }
+    // Тест 2: Проверка установки аппаратов источника и приемника
+    assert(out1.getFromApparatus() == reactor);
+    assert(out2.getFromApparatus() == reactor);
+    assert(out1.getToApparatus() == nullptr);
+    assert(out2.getToApparatus() == nullptr);
 
-    cout << "Test 2 failed"s << endl;
+    // Тест 3: Проверка геттеров и сеттеров для концентрации и объема
+    Stream testStream(5.0, 10.0);
+    testStream.setConcentration(8.0);
+    testStream.setVolume(15.0);
+    assert(testStream.getConcentration() == 8.0);
+    assert(testStream.getVolume() == 15.0);
+
+    // Тест 4: Проверка геттеров и сеттеров для аппаратов
+    testStream.setFromApparatus(app1);
+    testStream.setToApparatus(app2);
+    assert(testStream.getFromApparatus()->getName() == "Apparatus 1");
+    assert(testStream.getToApparatus()->getName() == "Apparatus 2");
+
+    // Тест 5: Проверка работы с нулевыми указателями аппаратов
+    testStream.setFromApparatus(nullptr);
+    testStream.setToApparatus(nullptr);
+    assert(testStream.getFromApparatus() == nullptr);
+    assert(testStream.getToApparatus() == nullptr);
+
+    std::cout << "Все тесты пройдены успешно!" << std::endl;
 }
 
-void shouldCorrectInputs() {
-    streamcounter=0;
-    Mixer d1 = Mixer(2);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    shared_ptr<Stream> s4(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-
-    d1.addInput(s1);
-    d1.addInput(s2);
-    d1.addOutput(s3);
-
-    try {
-      d1.addInput(s4);
-    } catch (const string ex) {
-      if (ex == "Too much inputs"s) {
-        cout << "Test 3 passed"s << endl;
-
-        return;
-      }
-    }
-
-    cout << "Test 3 failed"s << endl;
-}
-
-class Reactor : public Device{
-public:
-    Reactor(bool isDoubleReactor) {
-        inputAmount = 1;
-        if (isDoubleReactor) outputAmount = 2;
-        else inputAmount = 1;
-    }
-    
-    void updateOutputs() override{
-        double inputMass = inputs.at(0) -> getMassFlow();
-            for(int i = 0; i < outputAmount; i++){
-            double outputLocal = inputMass * (1/outputAmount);
-            outputs.at(i) -> setMassFlow(outputLocal);
-        }
-    }
-};
-
-void testTooManyOutputStreams(){
-    streamcounter=0;
-    
-    Reactor dl = new Reactor(false);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-    dl.addInput(s1);
-    dl.addOutput(s2);
-    try{
-        dl.addOutput(s3);
-    } catch(const string ex){
-         if (ex == "OUTPUT STREAM LIMIT!")
-            cout << "Test 1 passed" << endl;
-
-        return;
-    }
-    
-     cout << "Test 1 failed" << endl;
-}
-
-void testTooManyInputStreams(){
-    streamcounter=0;
-    
-    Reactor dl = new Reactor(false);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-    dl.addInput(s1);
-    try{
-        dl.addInput(s3);
-    } catch(const string ex){
-         if (ex == "INPUT STREAM LIMIT!")
-            cout << "Test 2 passed" << endl;
-
-        return;
-    }
-    
-     cout << "Test 2 failed"s << endl;
-}
-
-void testInputEqualOutput(){
-        streamcounter=0;
-    
-    Reactor dl = new Reactor(true);
-    
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-    dl.addInput(s1);
-    dl.addOutput(s2);
-    dl.addOutput(s3);
-    
-    dl.updateOutputs();
-    
-    if(dl.outputs.at(0).getMassFlow + dl.outputs.at(1).getMassFlow == dl.inputs.at(0).getMassFlow)
-        cout << "Test 3 passed" << endl;
-    else
-        cout << "Test 3 failed" << endl;
-}
-
-void tests(){
-    testInputEqualOutput();
-    testTooManyOutputStreams();
-    testTooManyInputStreams();
-    
-    shouldSetOutputsCorrectlyWithOneOutput();
-    shouldCorrectOutputs();
-    shouldCorrectInputs();
-}
-
-/**
- * @brief The entry point of the program.
- * @return 0 on successful execution.
- */
-int main()
-{
-    streamcounter = 0;
-
-    // Create streams
-    shared_ptr<Stream> s1(new Stream(++streamcounter));
-    shared_ptr<Stream> s2(new Stream(++streamcounter));
-    shared_ptr<Stream> s3(new Stream(++streamcounter));
-
-    // Set mass flows
-    s1->setMassFlow(10.0);
-    s2->setMassFlow(5.0);
-
-    // Create a device (e.g., Mixer) and add input/output streams
-    // Mixer d1;
-    // d1.addInput(s1);
-    // d1.addInput(s2);
-    // d1.addOutput(s3);
-
-    // Update the outputs of the device
-    // d1.updateOutputs();
-
-    // Print stream information
-//    s1->print();
-//    s2->print();
-//    s3->print();
-    tests();
-
+int main() {
+    runTests();
     return 0;
 }
+
